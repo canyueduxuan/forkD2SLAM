@@ -12,6 +12,7 @@
 #include <message_filters/time_synchronizer.h>
 #include <thread>
 #include "hitnet.hpp"
+#include "crestereo.hpp"
 
 namespace D2QuadCamDepthEst{
 const int32_t kCamerasNum = 4;
@@ -52,6 +53,7 @@ class QuadcamDepthEstTrt{
   std::vector<Swarm::Pose> virtual_left_extrinsics_; //extrinsics of virtual left cameras
 
   std::unique_ptr<TensorRTHitnet::HitnetTrt> hitnet_ = nullptr; //hitnet
+  std::unique_ptr<TensorRTCrestereo::CrestereoTrt> crestereo_ = nullptr; //crestereo
   ros::NodeHandle nh_;
   image_transport::ImageTransport * image_transport_;
   image_transport::Subscriber image_sub_;
@@ -100,6 +102,8 @@ class QuadcamDepthEstTrt{
   std::mutex raw_image_mutex_;
 
   cv::Mat split_raw_images_[kCamerasNum];
+  cv::cuda::GpuMat split_raw_images_GPU_[kCamerasNum];
+
   cv::cuda::GpuMat rectified_images_[kCamerasNum][2];//{left,right},{left,right},{left,right},{left,right}
   cv::Mat input_tensors_[kCamerasNum];
   std::mutex input_tensors_mutex_;

@@ -2,29 +2,30 @@ enable_cnn: true
 cnn_int8: false
 cnn_fp16: true
 cnn_use_tensorrt: true
-cnn_type: "hitnet"
-# cnn_type: "crestereo"
-onnx_path: "/root/swarm_ws/src/D2SLAM/models/hitnet_series/hitnet_1x240x320_model_float16_quant_opt.onnx"
+# cnn_type: "hitnet"
+cnn_type: "crestereo"
+onnx_path: "/root/swarm_ws/src/D2SLAM/models/hitnet_series/crestereo_init_iter2_240x320_sim.onnx"
 cnn_quant_path: ""
-trt_engine_path: "/root/swarm_ws/src/D2SLAM/models/hitnet_series/hitnet_1x240x320_model_float16_quant_opt.trt"
-cnn_input_rgb : false
+trt_engine_path: "/root/swarm_ws/src/D2SLAM/models/hitnet_series/crestereo_init_iter2_240x320_sim.trt"
+cnn_input_rgb : true
 enable_texture: false
 width: 320
 height: 240
 pixel_step: 2
-image_step: 3
+image_step: 2
 max_z: 10
-min_z: 0.1
+min_z: 0.5
 cam_calib_file_path: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/fisheye_cams.yaml"
-fov: 190
-fps: 10
+fov: 180
+fps: 20
+use_eucm: true #true for eucm model, false for omni model
 
 image_topic: "/oak_ffc_4p/assemble_image"
-image_type: "raw"
+image_format: "raw"
 
 drone_pose_topic: "/d2vins/imu_propagation"
 
-use_occ_map: true
+use_occ_map: false
 
 photometric_calib_numbers: 4
 #TODO: refine this process to make vig calibration more easy to read
@@ -33,36 +34,41 @@ photometric_calib_path: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/
 # photometric_calib: "mask.png"
 photometric_calib: ""
 avg_brightness: 0.7
+# 0 left 1 right
 stereos:
   stereo1_0:
-    cam_idx_l: 0
-    cam_idx_r: 1
+    cam_idx_l: 1
+    cam_idx_r: 0
     idx_l: 1
     idx_r: 0
+    # stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_0_1_120_160.yaml"
     stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_0_1_240_320.yaml"
     pointcloud_topic: "quaddepth/pointcloud_0"
     cam_pos_topic: "quaddepth/cam_pos_0"
   stereo2_1:
-    cam_idx_l: 1
-    cam_idx_r: 2
+    cam_idx_l: 2
+    cam_idx_r: 1
     idx_l: 1
     idx_r: 0
+    # stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_1_2_120_160.yaml"
     stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_1_2_240_320.yaml"
     pointcloud_topic: "quaddepth/pointcloud_1"
     cam_pos_topic: "quaddepth/cam_pos_1"
   stereo3_2:
-    cam_idx_l: 2
-    cam_idx_r: 3
+    cam_idx_l: 3
+    cam_idx_r: 2
     idx_l: 1
     idx_r: 0
+    # stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_2_3_120_160.yaml"
     stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_2_3_240_320.yaml"
     pointcloud_topic: "quaddepth/pointcloud_2"
     cam_pos_topic: "quaddepth/cam_pos_2"
   stereo0_3:
-    cam_idx_l: 3
-    cam_idx_r: 0
+    cam_idx_l: 0
+    cam_idx_r: 3
     idx_l: 1
     idx_r: 0
+    # stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_3_0_120_160.yaml"
     stereo_config: "/root/swarm_ws/src/D2SLAM/config/quadcam_drone_nxt_tmp/stereo_calib_3_0_240_320.yaml"
     pointcloud_topic: "quaddepth/pointcloud_3"
     cam_pos_topic: "quaddepth/cam_pos_3"

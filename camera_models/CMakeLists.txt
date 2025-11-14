@@ -67,6 +67,7 @@ add_library(camera_models
     src/camera_models/ScaramuzzaCamera.cc
     src/camera_models/PolyFisheyeCamera.cc
     src/camera_models/CylindricalCamera.cc
+    src/camera_models/EucmCamera.cc
     #src/sparse_graph/Transform.cc
     src/gpl/gpl.cc
     src/code_utils/math_utils/Polynomial.cpp

@@ -56,6 +56,7 @@ add_subdirectory(../tensorrt_utils  tensorrt_utils)
 add_library(${PROJECT_NAME}
   src/virtual_stereo.cpp
   src/hitnet.cpp
+  src/crestereo.cpp
   src/quadcam_depth_est_trt.cpp
 )
 

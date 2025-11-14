@@ -58,15 +58,15 @@ QuadcamDepthEstTrt::QuadcamDepthEstTrt(ros::NodeHandle & nh):nh_(nh){
   if(config["image_format"].IsDefined()){
     this->image_format_ = config["image_format"].as<std::string>();
   }
-  //hitnet
+  //crestereo
   for(int i = 0 ; i<kCamerasNum; i++){
     this->output_tensors_[i] = cv::Mat(this->height_,this->width_,CV_32F);
   }
   this->onnx_path_ = config["onnx_path"].as<std::string>();
   this->trt_engine_path_ = config["trt_engine_path"].as<std::string>();
 
-  this->hitnet_ = std::make_unique<TensorRTHitnet::HitnetTrt>(true);
-  this->hitnet_->init(onnx_path_,trt_engine_path_, 4);
+  this->crestereo_ = std::make_unique<TensorRTCrestereo::CrestereoTrt>(true);
+  this->crestereo_->init(onnx_path_,trt_engine_path_, 4);
 
   //subscribe
   image_transport::TransportHints hints(this->image_format_, ros::TransportHints().tcpNoDelay(true));
@@ -94,8 +94,8 @@ QuadcamDepthEstTrt::~QuadcamDepthEstTrt(){
     delete pcl_color_;
     pcl_color_ = nullptr;
   }
-  if (this->hitnet_ != nullptr){
-    this->hitnet_ = nullptr;
+  if (this->crestereo_ != nullptr){
+    this->crestereo_ = nullptr;
   }
 };
 
@@ -247,7 +247,8 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
         this->raw_image_process_rate_->sleep();
         continue;
       } else {
-        raw_image = raw_image_;
+        raw_image = raw_image_.clone();
+        raw_image_.release();
         this->raw_image_mutex_.unlock();
       }
     } else {
@@ -256,7 +257,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
     }
 
     for(int32_t i = 0; i< kCamerasNum; i++){
-      cv::Mat splited_image = raw_image(cv::Rect(i * raw_image_.cols /kCamerasNum, 0, 
+      cv::Mat splited_image = raw_image(cv::Rect(i * raw_image.cols /kCamerasNum, 0, 
         raw_image.cols /kCamerasNum, raw_image.rows));
       if(!this->cnn_input_rgb_){
         
@@ -275,7 +276,8 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
         cv::waitKey(1);
         #endif
       } else {
-        split_raw_images_[i] = splited_image;
+        // split_raw_images_[i] = splited_image;
+        split_raw_images_GPU_[i].upload(splited_image);
       }
     }
     #ifdef DEBUG
@@ -286,7 +288,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
 
     //get rectify images
     for(auto && stereo: this->virtual_stereos_){
-      stereo->rectifyImage(split_raw_images_[stereo->cam_idx_a],split_raw_images_[stereo->cam_idx_b],
+      stereo->rectifyImage(split_raw_images_GPU_[stereo->cam_idx_a],split_raw_images_GPU_[stereo->cam_idx_b],
         rectified_images_[stereo->cam_idx_a][stereo->cam_idx_a_right_half_id],
         rectified_images_[stereo->cam_idx_b][stereo->cam_idx_b_left_half_id]);
     }
@@ -305,7 +307,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
     }
     #endif
 
-    //construct input images for hitnet inferrence and  TODO: can gpu mat be used directly?
+    //construct input images for crestereo inferrence and  TODO: can gpu mat be used directly?
     cv::Mat temp_left , temp_right, input_image[4];
 
     for (auto && stereo : this->virtual_stereos_){
@@ -325,7 +327,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
       continue;
     } else {
       for (auto && stereo : this->virtual_stereos_){
-        input_image[stereo->stereo_id].convertTo(input_tensors_[stereo->stereo_id],CV_32FC1,1.0/255.0);
+        input_image[stereo->stereo_id].convertTo(input_tensors_[stereo->stereo_id],CV_32FC1,1.0);
       }
       input_tensors_mutex_.unlock();
     }
@@ -346,17 +348,18 @@ void QuadcamDepthEstTrt::inferrenceThread(){
       }
 
       for (auto stereo : this->virtual_stereos_){
-        input_tensors[stereo->stereo_id] = input_tensors_[stereo->stereo_id];
+        input_tensors[stereo->stereo_id] = input_tensors_[stereo->stereo_id].clone();
       }
+      input_tensors_[0].release();
       input_tensors_mutex_.unlock();
     } else {
       this->inference_rate_->sleep();
       continue;
     }
-    this->hitnet_->doInference(input_tensors);
+    this->crestereo_->doInference(input_tensors);
 
     if (output_tensors_mutex_.try_lock()){
-      this->hitnet_->getOutput(output_tensors_);
+      this->crestereo_->getOutput(output_tensors_);
       output_tensors_mutex_.unlock();
     } else {
       this->inference_rate_->sleep();
@@ -370,18 +373,22 @@ void QuadcamDepthEstTrt::inferrenceThread(){
 void QuadcamDepthEstTrt::publishThread(){
   //TODO: publish pointcloud and do visualization
   while(publish_thread_running_){
-    //if output_tensors_ is empty, wait for next loop
-    if (this->output_tensors_[0].empty()){
-      this->publish_rate_->sleep();
-      continue;
-    }
 
     //copy data to local
     if (output_tensors_mutex_.try_lock()){
-      for (auto stereo : this->virtual_stereos_){
-        publish_disparity_[stereo->stereo_id] = output_tensors_[stereo->stereo_id];
-      }
-      output_tensors_mutex_.unlock();
+        //if output_tensors_ is empty, wait for next loop
+        if (this->output_tensors_[0].empty()){
+          this->publish_rate_->sleep();
+          continue;
+        }
+        else
+        {
+            for (auto stereo : this->virtual_stereos_){
+                publish_disparity_[stereo->stereo_id] = output_tensors_[stereo->stereo_id].clone();
+            }
+            output_tensors_[0].release();
+            output_tensors_mutex_.unlock();
+        }
     } else {
       this->publish_rate_->sleep();
       continue;

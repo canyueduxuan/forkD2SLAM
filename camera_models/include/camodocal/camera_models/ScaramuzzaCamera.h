@@ -37,6 +37,9 @@ public:
 
         double& poly(int idx) { return m_poly[idx]; }
         double& inv_poly(int idx) { return m_inv_poly[idx]; }
+        
+        int& height(void) { return m_imageHeight; }
+        int& width(void) { return m_imageWidth; }
 
         double C(void) const { return m_C; }
         double D(void) const { return m_D; }

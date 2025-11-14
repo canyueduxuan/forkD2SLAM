@@ -102,8 +102,8 @@ class FisheyeUndist {
           cam_id(_id) {
         raw_width = cam->imageWidth();
         raw_height = cam->imageHeight();
-        fisheye2cam_pt = cv::Mat::zeros(raw_width, raw_height, CV_32FC2);
-        fisheye2cam_id = cv::Mat::ones(raw_width, raw_height, CV_8UC1);
+        fisheye2cam_pt = cv::Mat::zeros(raw_height, raw_width, CV_32FC2);
+        fisheye2cam_id = cv::Mat::ones(raw_height, raw_width, CV_8UC1);
         fisheye2cam_id = fisheye2cam_id * 255;
         if (mode == UndistortPinhole5) {
             undistMaps =

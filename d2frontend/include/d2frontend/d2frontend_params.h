@@ -131,7 +131,6 @@ struct D2FrontendParams {
     static std::pair<camodocal::CameraPtr, Swarm::Pose> readCameraConfig(
     const std::string& camera_name, const YAML::Node& config, int32_t extrinsic_parameter_type = 1);
 
-
 };
 extern D2FrontendParams * params;
 

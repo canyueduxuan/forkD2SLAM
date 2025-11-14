@@ -64,6 +64,9 @@ class VirtualStereo {
     int32_t rectifyImage(const cv::Mat & left, const cv::Mat & right,
         cv::cuda::GpuMat & rect_left, cv::cuda::GpuMat & rect_right);
 
+    int32_t rectifyImage(cv::cuda::GpuMat & left,cv::cuda::GpuMat & right,
+        cv::cuda::GpuMat & rect_left, cv::cuda::GpuMat & rect_right);
+
     cv::Mat estimateDisparityOCV(const cv::Mat & left, const cv::Mat & right);
     cv::Mat estimateDisparity(const cv::Mat & left, const cv::Mat & right);
     std::pair<cv::Mat, cv::Mat> estimateDisparityViaRaw(const cv::Mat & left, const cv::Mat & right,

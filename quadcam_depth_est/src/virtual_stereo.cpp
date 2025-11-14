@@ -256,8 +256,8 @@ int32_t VirtualStereo::rectifyImage(const cv::Mat & left, const cv::Mat & right,
             cv::cuda::multiply(img_cuda_r, inv_vingette_r, img_cuda_r);
         }
     } else {
-        img_cuda_l = undist_left->undist_id_cuda(left, undist_id_l, true);
-        img_cuda_r = undist_right->undist_id_cuda(right, undist_id_r, true);
+        img_cuda_l = undist_left->undist_id_cuda(left, undist_id_l, false);
+        img_cuda_r = undist_right->undist_id_cuda(right, undist_id_r, false);
     }
     //Bug Here lamp_1 and lmap_2 generation faield
 
@@ -266,7 +266,39 @@ int32_t VirtualStereo::rectifyImage(const cv::Mat & left, const cv::Mat & right,
     cv::imshow("undist_left",undist_left);
     printf("[Debug]undist_left size %d %d\n",undist_left.cols,undist_left.rows);
     #endif
+    // rect_left = img_cuda_l;
+    // rect_right = img_cuda_r;
+    cv::cuda::remap(img_cuda_l, rect_left, cuda_lmap_1, cuda_lmap_2, cv::INTER_LINEAR);
+    cv::cuda::remap(img_cuda_r, rect_right, cuda_rmap_1, cuda_rmap_2, cv::INTER_LINEAR);
+    return 0;
+}
 
+int32_t VirtualStereo::rectifyImage(cv::cuda::GpuMat & left, cv::cuda::GpuMat & right, 
+    cv::cuda::GpuMat & rect_left, cv::cuda::GpuMat & rect_right) {
+    cv::cuda::GpuMat img_cuda_l, img_cuda_r;
+    if (input_is_stereo) {
+        // printf("[Debug] stereo rectify\n");
+        // img_cuda_l.upload(left);
+        // img_cuda_r.upload(right);
+        if (!inv_vingette_l.empty()) {
+            left.convertTo(img_cuda_l, CV_32FC1);
+            right.convertTo(img_cuda_r, CV_32FC1);
+            cv::cuda::multiply(img_cuda_l, inv_vingette_l, img_cuda_l);
+            cv::cuda::multiply(img_cuda_r, inv_vingette_r, img_cuda_r);
+        }
+    } else {
+        img_cuda_l = undist_left->undist_id_cuda(left, undist_id_l, false);
+        img_cuda_r = undist_right->undist_id_cuda(right, undist_id_r, false);
+    }
+    //Bug Here lamp_1 and lmap_2 generation faield
+
+    #ifdef DEBUG
+    cv::Mat undist_left(left);
+    cv::imshow("undist_left",undist_left);
+    printf("[Debug]undist_left size %d %d\n",undist_left.cols,undist_left.rows);
+    #endif
+    // rect_left = img_cuda_l;
+    // rect_right = img_cuda_r;
     cv::cuda::remap(img_cuda_l, rect_left, cuda_lmap_1, cuda_lmap_2, cv::INTER_LINEAR);
     cv::cuda::remap(img_cuda_r, rect_right, cuda_rmap_1, cuda_rmap_2, cv::INTER_LINEAR);
     return 0;

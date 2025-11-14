@@ -2,6 +2,8 @@
 
 #include <camodocal/camera_models/CataCamera.h>
 #include <camodocal/camera_models/PinholeCamera.h>
+#include <camodocal/camera_models/EucmCamera.h>
+#include <camodocal/camera_models/ScaramuzzaCamera.h>
 #include <d2common/fisheye_undistort.h>
 #include <spdlog/spdlog.h>
 #include <yaml-cpp/yaml.h>
@@ -389,6 +391,7 @@ readCameraConfig(
   // In this case, we generate camera ptr.
   // Now only accept omni-radtan.
   camodocal::CameraPtr camera;
+  camodocal::OCAMCamera::Parameters OCAM_params;
   if (config["camera_model"].as<std::string>() == "omni" &&
       config["distortion_model"].as<std::string>() == "radtan") {
     int width = config["resolution"][0].as<int>();
@@ -429,7 +432,41 @@ readCameraConfig(
         camera_name.c_str(), width, height, fx, fy, cx, cy, k1, k2, p1, p2);
     camera = camodocal::PinholeCameraPtr(new camodocal::PinholeCamera(
         camera_name, width, height, k1, k2, p1, p2, fx, fy, cx, cy));
-  } else {
+  }else if(config["camera_model"].as<std::string>() == "eucm" && 
+        config["distortion_model"].as<std::string>() == "none" ) {
+    int width = config["resolution"][0].as<int>();
+    int height = config["resolution"][1].as<int>();
+    double alpha = config["intrinsics"][0].as<double>();
+    double beta = config["intrinsics"][1].as<double>();
+    double fx = config["intrinsics"][2].as<double>();
+    double fy = config["intrinsics"][3].as<double>();
+    double cx = config["intrinsics"][4].as<double>();
+    double cy = config["intrinsics"][5].as<double>();
+    printf("Camera %s model eucm-none\n width: %d, height: %d, alpha: %f, beta: %f, fx: %f, fy: %f, cx: %f, cy: %f\n", 
+        camera_name.c_str(), width, height, alpha, beta, fx, fy, cx, cy);
+    camera = camodocal::EucmCameraPtr(new camodocal::EucmCamera(camera_name,
+        width, height, alpha, beta, fx, fy, cx, cy));
+    }else if(config["camera_model"].as<std::string>() == "OCAM" ){
+    OCAM_params.C() = config["affine_parameters"][0].as<double>();
+    OCAM_params.D() = config["affine_parameters"][1].as<double>();
+    OCAM_params.E() = config["affine_parameters"][2].as<double>();
+    OCAM_params.center_y() = config["center"][0].as<double>();
+    OCAM_params.center_x() = config["center"][1].as<double>();
+    for (int i = 0; i < config["poly"].size(); i++) {
+        OCAM_params.poly(i) = config["poly"][i].as<double>();
+    }
+
+    for (int i = 0; i < config["inv_poly"].size(); i++) {
+        OCAM_params.inv_poly(i) = config["inv_poly"][i].as<double>();
+    }
+    
+    OCAM_params.width() = config["resolution"][0].as<int>();
+    OCAM_params.height() = config["resolution"][1].as<int>();
+    printf("Camera %s model OCAM\n", camera_name.c_str());
+    camera = camodocal::OCAMCameraPtr(new camodocal::OCAMCamera(OCAM_params));
+    }
+  
+  else {
     SPDLOG_ERROR(
         "Camera not supported yet, please fillin in src/d2frontend_params.cpp "
         "function: readCameraConfig");
@@ -458,5 +495,6 @@ readCameraConfig(
 
   return std::make_pair(camera, pose);
 }
+
 
 }  // namespace D2FrontEnd
