@@ -11,6 +11,7 @@
 #include <image_transport/subscriber_filter.h>
 #include <message_filters/time_synchronizer.h>
 #include <thread>
+#include <condition_variable>
 #include "hitnet.hpp"
 #include "crestereo.hpp"
 
@@ -100,6 +101,8 @@ class QuadcamDepthEstTrt{
   cv::Mat raw_image_;
   std_msgs::Header raw_image_header_;
   std::mutex raw_image_mutex_;
+  std::condition_variable raw_image_cv_;
+  bool new_raw_image_ = false;
 
   cv::Mat split_raw_images_[kCamerasNum];
   cv::cuda::GpuMat split_raw_images_GPU_[kCamerasNum];
@@ -107,9 +110,13 @@ class QuadcamDepthEstTrt{
   cv::cuda::GpuMat rectified_images_[kCamerasNum][2];//{left,right},{left,right},{left,right},{left,right}
   cv::Mat input_tensors_[kCamerasNum];
   std::mutex input_tensors_mutex_;
+  std::condition_variable input_tensors_cv_;
+  bool new_input_tensors_ = false;
 
   cv::Mat output_tensors_[kCamerasNum];
   std::mutex output_tensors_mutex_;
+  std::condition_variable output_tensors_cv_;
+  bool new_output_tensors_ = false;
 
   cv::Mat recity_images_for_show_and_texture_[kCamerasNum][2];
   cv::Mat publish_disparity_[kCamerasNum];

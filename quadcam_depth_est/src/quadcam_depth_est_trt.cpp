@@ -225,36 +225,28 @@ void QuadcamDepthEstTrt::stopAllService(){
 }
 
 void QuadcamDepthEstTrt::quadcamImageCb(const sensor_msgs::ImageConstPtr & images){
-  if (!raw_image_mutex_.try_lock()){
-    return;
-  } else {
+  {
+    std::unique_lock<std::mutex> lock(raw_image_mutex_);
     raw_image_ = cv_bridge::toCvCopy(images, sensor_msgs::image_encodings::BGR8)->image;
     this->raw_image_header_ = images->header;
-    raw_image_mutex_.unlock();
+    new_raw_image_ = true;
   }
-  return;
+  raw_image_cv_.notify_one();
 }
 
 //TODO:kCamearsNum = size of vitual_stereos_
 void QuadcamDepthEstTrt::rawImageProcessThread(){
   while(raw_image_process_thread_running_){
     static cv::Mat raw_image;
+    {
+      std::unique_lock<std::mutex> lock(raw_image_mutex_);
+      raw_image_cv_.wait(lock, [this]{ return new_raw_image_;});
+      raw_image = raw_image_.clone();
+      new_raw_image_ = false;
+    }
     /* Because raw_image_ always get new memory addr, 
       so here we handle the memory and release raw_image_ for cb */
-    if (raw_image_mutex_.try_lock()){
-      if (raw_image_.empty()){
-        this->raw_image_mutex_.unlock();
-        this->raw_image_process_rate_->sleep();
-        continue;
-      } else {
-        raw_image = raw_image_.clone();
-        raw_image_.release();
-        this->raw_image_mutex_.unlock();
-      }
-    } else {
-      this->raw_image_process_rate_->sleep();
-      continue;
-    }
+
 
     for(int32_t i = 0; i< kCamerasNum; i++){
       cv::Mat splited_image = raw_image(cv::Rect(i * raw_image.cols /kCamerasNum, 0, 
@@ -321,16 +313,14 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
       cv::vconcat(temp_left,temp_right,input_image[stereo->stereo_id]);
     }
 
-    //to reduce the time of mutex lock
-    if (!input_tensors_mutex_.try_lock()){
-      this->raw_image_process_rate_->sleep();
-      continue;
-    } else {
+    {
+      std::unique_lock<std::mutex> lock(input_tensors_mutex_);
       for (auto && stereo : this->virtual_stereos_){
         input_image[stereo->stereo_id].convertTo(input_tensors_[stereo->stereo_id],CV_32FC1,1.0);
       }
-      input_tensors_mutex_.unlock();
+      new_input_tensors_ = true;
     }
+    input_tensors_cv_.notify_one();
     this->raw_image_process_rate_->sleep();
   }
   return ;
@@ -339,32 +329,23 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
 void QuadcamDepthEstTrt::inferrenceThread(){
   static cv::Mat input_tensors[4];
   while(inference_thread_running_){
-    if(input_tensors_mutex_.try_lock()){
-      //if input_tensors_ is empty, wait for next loop
-      if (this->input_tensors_[0].empty()){
-        this->input_tensors_mutex_.unlock();
-        this->inference_rate_->sleep();
-        continue;
-      }
-
+    {
+      std::unique_lock<std::mutex> lock(input_tensors_mutex_);
+      input_tensors_cv_.wait(lock, [this]{ return new_input_tensors_;});
       for (auto stereo : this->virtual_stereos_){
         input_tensors[stereo->stereo_id] = input_tensors_[stereo->stereo_id].clone();
       }
-      input_tensors_[0].release();
-      input_tensors_mutex_.unlock();
-    } else {
-      this->inference_rate_->sleep();
-      continue;
+      new_input_tensors_ = false;
     }
+    
     this->crestereo_->doInference(input_tensors);
-
-    if (output_tensors_mutex_.try_lock()){
+    
+    {
+      std::unique_lock<std::mutex> lock(output_tensors_mutex_);
       this->crestereo_->getOutput(output_tensors_);
-      output_tensors_mutex_.unlock();
-    } else {
-      this->inference_rate_->sleep();
-      continue;
+      new_output_tensors_ = true;
     }
+    output_tensors_cv_.notify_one();
     this->inference_rate_->sleep();
   }
   return ;
@@ -373,25 +354,13 @@ void QuadcamDepthEstTrt::inferrenceThread(){
 void QuadcamDepthEstTrt::publishThread(){
   //TODO: publish pointcloud and do visualization
   while(publish_thread_running_){
-
-    //copy data to local
-    if (output_tensors_mutex_.try_lock()){
-        //if output_tensors_ is empty, wait for next loop
-        if (this->output_tensors_[0].empty()){
-          this->publish_rate_->sleep();
-          continue;
-        }
-        else
-        {
-            for (auto stereo : this->virtual_stereos_){
-                publish_disparity_[stereo->stereo_id] = output_tensors_[stereo->stereo_id].clone();
-            }
-            output_tensors_[0].release();
-            output_tensors_mutex_.unlock();
-        }
-    } else {
-      this->publish_rate_->sleep();
-      continue;
+    {
+      std::unique_lock<std::mutex> lock(output_tensors_mutex_);
+      output_tensors_cv_.wait(lock, [this]{ return new_output_tensors_;});
+      for (auto stereo : this->virtual_stereos_){
+          publish_disparity_[stereo->stereo_id] = output_tensors_[stereo->stereo_id].clone();
+      }
+      new_output_tensors_ = false;
     }
     //debug show disparity
     if(show_){
