@@ -247,8 +247,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
         this->raw_image_process_rate_->sleep();
         continue;
       } else {
-        raw_image = raw_image_.clone();
-        raw_image_.release();
+        raw_image = raw_image_;
         this->raw_image_mutex_.unlock();
       }
     } else {
@@ -339,6 +338,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
 void QuadcamDepthEstTrt::inferrenceThread(){
   static cv::Mat input_tensors[4];
   while(inference_thread_running_){
+    printf("[QuadcamDepthEstTrt]: inference thread running\n");
     if(input_tensors_mutex_.try_lock()){
       //if input_tensors_ is empty, wait for next loop
       if (this->input_tensors_[0].empty()){
@@ -348,9 +348,8 @@ void QuadcamDepthEstTrt::inferrenceThread(){
       }
 
       for (auto stereo : this->virtual_stereos_){
-        input_tensors[stereo->stereo_id] = input_tensors_[stereo->stereo_id].clone();
+        input_tensors[stereo->stereo_id] = input_tensors_[stereo->stereo_id];
       }
-      input_tensors_[0].release();
       input_tensors_mutex_.unlock();
     } else {
       this->inference_rate_->sleep();
@@ -362,6 +361,7 @@ void QuadcamDepthEstTrt::inferrenceThread(){
       this->crestereo_->getOutput(output_tensors_);
       output_tensors_mutex_.unlock();
     } else {
+      printf("[QuadcamDepthEstTrt]:1 output_tensors_mutex_ locked, skip this output\n");
       this->inference_rate_->sleep();
       continue;
     }
@@ -373,7 +373,7 @@ void QuadcamDepthEstTrt::inferrenceThread(){
 void QuadcamDepthEstTrt::publishThread(){
   //TODO: publish pointcloud and do visualization
   while(publish_thread_running_){
-
+    printf("[QuadcamDepthEstTrt]: publish thread running\n");
     //copy data to local
     if (output_tensors_mutex_.try_lock()){
         //if output_tensors_ is empty, wait for next loop
@@ -384,13 +384,13 @@ void QuadcamDepthEstTrt::publishThread(){
         else
         {
             for (auto stereo : this->virtual_stereos_){
-                publish_disparity_[stereo->stereo_id] = output_tensors_[stereo->stereo_id].clone();
+                publish_disparity_[stereo->stereo_id] = output_tensors_[stereo->stereo_id];
             }
-            output_tensors_[0].release();
             output_tensors_mutex_.unlock();
         }
     } else {
       this->publish_rate_->sleep();
+      printf("[QuadcamDepthEstTrt]:2 output_tensors_mutex_ locked, skip publish\n");
       continue;
     }
     //debug show disparity
