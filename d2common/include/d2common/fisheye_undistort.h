@@ -150,11 +150,11 @@ class FisheyeUndist {
 #endif
     }
     
-    cv::cuda::GpuMat undist_id_cuda(cv::cuda::GpuMat img_cuda, int _id, bool calib_photometric=false) {
+    cv::cuda::GpuMat undist_id_cuda(cv::cuda::GpuMat img_cuda, int _id, bool calib_photometric=false,cv::cuda::Stream & cv_stream = cv::cuda::Stream::Null()) {
 #ifndef WITHOUT_CUDA
         cv::cuda::GpuMat output;
         cv::cuda::remap(img_cuda, output, undistMapsGPUX[_id],
-                        undistMapsGPUY[_id], REMAP_FUNC);
+                        undistMapsGPUY[_id], REMAP_FUNC,cv::BORDER_CONSTANT,cv::Scalar(),cv_stream);
         if (photometics_gpu.size() > 0 && calib_photometric) {
             if (output.channels() == 3) {
                 output.convertTo(output, CV_32FC3);

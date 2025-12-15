@@ -274,7 +274,7 @@ int32_t VirtualStereo::rectifyImage(const cv::Mat & left, const cv::Mat & right,
 }
 
 int32_t VirtualStereo::rectifyImage(cv::cuda::GpuMat & left, cv::cuda::GpuMat & right, 
-    cv::cuda::GpuMat & rect_left, cv::cuda::GpuMat & rect_right) {
+    cv::cuda::GpuMat & rect_left, cv::cuda::GpuMat & rect_right,cv::cuda::Stream & cv_stream) {
     cv::cuda::GpuMat img_cuda_l, img_cuda_r;
     if (input_is_stereo) {
         // printf("[Debug] stereo rectify\n");
@@ -287,8 +287,8 @@ int32_t VirtualStereo::rectifyImage(cv::cuda::GpuMat & left, cv::cuda::GpuMat & 
             cv::cuda::multiply(img_cuda_r, inv_vingette_r, img_cuda_r);
         }
     } else {
-        img_cuda_l = undist_left->undist_id_cuda(left, undist_id_l, false);
-        img_cuda_r = undist_right->undist_id_cuda(right, undist_id_r, false);
+        img_cuda_l = undist_left->undist_id_cuda(left, undist_id_l, false,cv_stream);
+        img_cuda_r = undist_right->undist_id_cuda(right, undist_id_r, false,cv_stream);
     }
     //Bug Here lamp_1 and lmap_2 generation faield
 
@@ -299,8 +299,8 @@ int32_t VirtualStereo::rectifyImage(cv::cuda::GpuMat & left, cv::cuda::GpuMat & 
     #endif
     // rect_left = img_cuda_l;
     // rect_right = img_cuda_r;
-    cv::cuda::remap(img_cuda_l, rect_left, cuda_lmap_1, cuda_lmap_2, cv::INTER_LINEAR);
-    cv::cuda::remap(img_cuda_r, rect_right, cuda_rmap_1, cuda_rmap_2, cv::INTER_LINEAR);
+    cv::cuda::remap(img_cuda_l, rect_left, cuda_lmap_1, cuda_lmap_2, cv::INTER_LINEAR,cv::BORDER_CONSTANT,cv::Scalar(),cv_stream);
+    cv::cuda::remap(img_cuda_r, rect_right, cuda_rmap_1, cuda_rmap_2, cv::INTER_LINEAR,cv::BORDER_CONSTANT,cv::Scalar(),cv_stream);
     return 0;
 }
 

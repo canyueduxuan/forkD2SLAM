@@ -93,6 +93,49 @@ int32_t CrestereoTrt::doInference(const cv::Mat input[4]){
   return 0;
 }
 
+int32_t CrestereoTrt::doInference(const cv::cuda::GpuMat input[4][2]){  
+  for(int32_t i = 0; i < this->stream_number_; i++){
+    if(input[i][0].empty()){
+      return 0;
+    }
+    int32_t ret = this->executors_[i].setInputImages(input[i][0],input[i][1]);
+    if(ret != 0){
+      std::cout << "setInputImages failed" << std::endl;
+      return -2;
+    }
+  }
+
+  for(int32_t i = 0; i < this->stream_number_; i++){
+    int32_t ret = this->executors_[i].doInference();
+    if(ret != 0){
+      std::cout << "doInference failed" << std::endl;
+      return -3;
+    }
+  }
+
+  for(int32_t i = 0; i < this->stream_number_; i++){
+    int32_t ret = this->executors_[i].copyBack();
+    if(ret != 0){
+      std::cout << "doInference failed" << std::endl;
+      return -3;
+    }
+  }
+
+  for(int32_t i = 0; i < this->stream_number_; i++){
+    int32_t ret = this->executors_[i].synchronize();
+    if(ret != 0){
+      std::cout << "synchronize failed" << std::endl;
+      return -4;
+    }
+  }
+
+  #ifdef DEBUG
+  printf ("inferenced\n");
+  #endif
+
+  return 0;
+}
+
 int32_t CrestereoTrt::getOutput(cv::Mat output[4]){
   for(int32_t i = 0; i < this->stream_number_; i++){
     int32_t ret = this->executors_[i].getOutput(output[i]);
@@ -226,6 +269,9 @@ int32_t CrestereoExcutor::init(std::shared_ptr<nvinfer1::ICudaEngine> engine_ptr
     return -1;
   }
   cudaStreamCreate(&this->stream_);
+  this->cv_stream = cv::cuda::StreamAccessor::wrapStream(
+          this->stream_
+      );
   if(this->stream_ == nullptr){
     std::cout << "cudaStreamCreate failed" << std::endl;
     return -2;
@@ -292,6 +338,51 @@ for (int c = 0; c < 3; c++)
     );
 }
   buffer_manager_ptr_->copyInputToDeviceAsync(this->stream_);
+  return 0;
+}
+
+int32_t CrestereoExcutor::setInputImages(const cv::cuda::GpuMat& left,const cv::cuda::GpuMat& right){
+    float* deviceDataBuffer1 = static_cast<float*>(this->buffer_manager_ptr_->getDeviceBuffer(this->input_tensor_name1_));
+    float* deviceDataBuffer2 = static_cast<float*>(this->buffer_manager_ptr_->getDeviceBuffer(this->input_tensor_name2_));
+    int channelSize = 240 * 320;
+
+    std::vector<cv::cuda::GpuMat> leftChannels(3), rightChannels(3);
+    
+    cv::cuda::split(left, leftChannels, this->cv_stream);
+    cv::cuda::split(right, rightChannels,this->cv_stream);
+    // 左图
+    for (int c = 0; c < 3; c++)
+    {
+      size_t width_bytes = leftChannels[c].cols * leftChannels[c].elemSize();
+
+      cudaMemcpy2DAsync(
+          deviceDataBuffer1 + c * channelSize,
+          leftChannels[c].cols * leftChannels[c].elemSize(), // dst pitch
+          leftChannels[c].data,
+          leftChannels[c].step,                   // src pitch
+          width_bytes,
+          leftChannels[c].rows,
+          cudaMemcpyDeviceToDevice,
+          this->stream_
+      );
+    }
+
+    // // 右图
+    for (int c = 0; c < 3; c++)
+    {
+      size_t width_bytes = rightChannels[c].cols * rightChannels[c].elemSize();
+
+      cudaMemcpy2DAsync(
+          deviceDataBuffer2 + c * channelSize,
+          leftChannels[c].cols * rightChannels[c].elemSize(), // dst pitch
+          rightChannels[c].data,
+          rightChannels[c].step,                   // src pitch
+          width_bytes,
+          rightChannels[c].rows,
+          cudaMemcpyDeviceToDevice,
+          this->stream_
+      );
+    }
   return 0;
 }
 

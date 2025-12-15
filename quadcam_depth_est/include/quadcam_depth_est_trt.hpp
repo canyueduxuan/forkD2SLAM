@@ -108,7 +108,7 @@ class QuadcamDepthEstTrt{
   cv::cuda::GpuMat split_raw_images_GPU_[kCamerasNum];
 
   cv::cuda::GpuMat rectified_images_[kCamerasNum][2];//{left,right},{left,right},{left,right},{left,right}
-  cv::Mat input_tensors_[kCamerasNum];
+  cv::cuda::GpuMat input_tensors_[kCamerasNum][2];
   std::mutex input_tensors_mutex_;
   std::condition_variable input_tensors_cv_;
   bool new_input_tensors_ = false;
@@ -122,6 +122,7 @@ class QuadcamDepthEstTrt{
   cv::Mat publish_disparity_[kCamerasNum];
   cv::Mat photometric_inv_vingette_[kCamerasNum];
 
+  cv::cuda::Stream cv_streams[kCamerasNum];
 };
 
 }

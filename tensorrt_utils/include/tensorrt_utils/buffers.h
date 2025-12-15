@@ -178,9 +178,31 @@ namespace tensorrt_buffer {
             free(ptr);
         }
     };
+    /*----------------------------------------*/
+    class PinnedAllocator
+    {
+    public:
+        bool operator()(void** ptr, size_t size) const
+        {
+            // 使用cudaMallocHost分配Pinned内存
+            cudaError_t status = cudaMallocHost(ptr, size);
+            return status == cudaSuccess;
+        }
+    };
 
+    class PinnedFree
+    {
+    public:
+        void operator()(void* ptr) const
+        {
+            // 使用cudaFreeHost释放Pinned内存
+            cudaFreeHost(ptr);
+        }
+    };
+    /*--------------------------------------------*/
     using DeviceBuffer = GenericBuffer<DeviceAllocator, DeviceFree>;
-    using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
+    using HostBuffer = GenericBuffer<PinnedAllocator, PinnedFree>;
+    // using HostBuffer = GenericBuffer<HostAllocator, HostFree>;
 
 //!
 //! \brief  The ManagedBuffer class groups together a pair of corresponding device and host buffers.

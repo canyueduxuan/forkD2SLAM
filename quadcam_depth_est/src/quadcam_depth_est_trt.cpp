@@ -83,6 +83,14 @@ QuadcamDepthEstTrt::QuadcamDepthEstTrt(ros::NodeHandle & nh):nh_(nh){
   //publisher
   this->pub_pcl_ = nh_.advertise<sensor_msgs::PointCloud2>(kPointCloudTopic_, 1);
   printf("QuadcamDepthEtsTrt constructed\n");
+
+  //cv_streams
+  for (auto && stereo : this->virtual_stereos_)
+  {
+    this->cv_streams[stereo->stereo_id] = cv::cuda::StreamAccessor::wrapStream(
+          this->crestereo_->executors_[stereo->stereo_id].stream_
+      );
+  }
 };
 
 QuadcamDepthEstTrt::~QuadcamDepthEstTrt(){
@@ -269,7 +277,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
         #endif
       } else {
         // split_raw_images_[i] = splited_image;
-        split_raw_images_GPU_[i].upload(splited_image);
+        split_raw_images_GPU_[i].upload(splited_image,this->cv_streams[i]);
       }
     }
     #ifdef DEBUG
@@ -282,7 +290,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
     for(auto && stereo: this->virtual_stereos_){
       stereo->rectifyImage(split_raw_images_GPU_[stereo->cam_idx_a],split_raw_images_GPU_[stereo->cam_idx_b],
         rectified_images_[stereo->cam_idx_a][stereo->cam_idx_a_right_half_id],
-        rectified_images_[stereo->cam_idx_b][stereo->cam_idx_b_left_half_id]);
+        rectified_images_[stereo->cam_idx_b][stereo->cam_idx_b_left_half_id],this->cv_streams[stereo->stereo_id]);
     }
 
     #ifdef DEBUG
@@ -301,6 +309,7 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
 
     //construct input images for crestereo inferrence and  TODO: can gpu mat be used directly?
     cv::Mat temp_left , temp_right, input_image[4];
+    cv::cuda::GpuMat input_image_GPU[kCamerasNum][2];
 
     for (auto && stereo : this->virtual_stereos_){
       temp_left = cv::Mat(rectified_images_[stereo->cam_idx_a][stereo->cam_idx_a_right_half_id]);
@@ -310,13 +319,16 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
       // redundant undistort image is already in size
       // cv::resize(temp_left,temp_left,cv::Size(this->width_,this->height_));
       // cv::resize(temp_right,temp_right,cv::Size(this->width_,this->height_));
-      cv::vconcat(temp_left,temp_right,input_image[stereo->stereo_id]);
+      // cv::vconcat(temp_left,temp_right,input_image[stereo->stereo_id]);
+      rectified_images_[stereo->cam_idx_a][stereo->cam_idx_a_right_half_id].convertTo(input_image_GPU[stereo->stereo_id][0],CV_32FC3,1.0,this->cv_streams[stereo->stereo_id]);
+      rectified_images_[stereo->cam_idx_b][stereo->cam_idx_b_left_half_id].convertTo(input_image_GPU[stereo->stereo_id][1],CV_32FC3,1.0,this->cv_streams[stereo->stereo_id]);
     }
-
+    
     {
       std::unique_lock<std::mutex> lock(input_tensors_mutex_);
       for (auto && stereo : this->virtual_stereos_){
-        input_image[stereo->stereo_id].convertTo(input_tensors_[stereo->stereo_id],CV_32FC1,1.0);
+        input_tensors_[stereo->stereo_id][0] = input_image_GPU[stereo->stereo_id][0];
+        input_tensors_[stereo->stereo_id][1] = input_image_GPU[stereo->stereo_id][1];
       }
       new_input_tensors_ = true;
     }
@@ -327,13 +339,14 @@ void QuadcamDepthEstTrt::rawImageProcessThread(){
 }
 
 void QuadcamDepthEstTrt::inferrenceThread(){
-  static cv::Mat input_tensors[4];
+  cv::cuda::GpuMat input_tensors[4][2];
   while(inference_thread_running_){
     {
       std::unique_lock<std::mutex> lock(input_tensors_mutex_);
       input_tensors_cv_.wait(lock, [this]{ return new_input_tensors_;});
       for (auto stereo : this->virtual_stereos_){
-        input_tensors[stereo->stereo_id] = input_tensors_[stereo->stereo_id].clone();
+        input_tensors_[stereo->stereo_id][0].copyTo(input_tensors[stereo->stereo_id][0],this->cv_streams[stereo->stereo_id]);
+        input_tensors_[stereo->stereo_id][1].copyTo(input_tensors[stereo->stereo_id][1],this->cv_streams[stereo->stereo_id]);
       }
       new_input_tensors_ = false;
     }

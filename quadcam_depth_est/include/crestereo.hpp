@@ -10,7 +10,9 @@
 #include <NvOnnxParser.h>
 #include <stdint.h>
 #include "tensorrt_utils/buffers.h"
-
+#include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaarithm.hpp>
+#include <opencv2/core/cuda_stream_accessor.hpp>
 // constexpr char kInputTensorName[] = "input";
 // constexpr char kOutputTensorName[] = "reference_output_disparity";
 
@@ -40,16 +42,18 @@ class CrestereoExcutor{
     std::string input_tensor_name = "input",
     std::string output_tensor_name = "output");
   int32_t setInputImages(const cv::Mat& input);
+  int32_t setInputImages(const cv::cuda::GpuMat &left, const cv::cuda::GpuMat &right);
   int32_t doInference();
   int32_t copyBack();
   int32_t synchronize();
   int32_t getOutput(cv::Mat& output);
   
- private:
+ public:
   std::shared_ptr<nvinfer1::ICudaEngine> engine_ptr_ = nullptr;
   nvinfer1::IExecutionContext* nv_context_ptr_ = nullptr;
   std::shared_ptr <tensorrt_buffer::BufferManager> buffer_manager_ptr_; //TODO: risky
   cudaStream_t stream_;
+  cv::cuda::Stream cv_stream;
   std::string input_tensor_name1_ = "left";
   std::string input_tensor_name2_ = "right";
   std::string output_tensor_name_ = "output";
@@ -65,8 +69,9 @@ class CrestereoTrt{
   ~CrestereoTrt();
   int32_t init(const std::string& onnx_model_path, const std::string& trt_engine_path, int32_t stream_number);
   int32_t doInference(const cv::Mat input[4]);//input  4 1x2x240x320 bcwh output 4 1x1x240x320 disparity
+  int32_t doInference(const cv::cuda::GpuMat input[4][2]);
   int32_t getOutput(cv::Mat output[4]);
- private:
+ public:
   int32_t deserializeEngine(const std::string& trt_engine_path);
   int32_t buildEngine(const std::string& onnx_model_path, const std::string& trt_engine_path);
 
